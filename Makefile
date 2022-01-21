@@ -29,6 +29,7 @@ lint-all:
 
 test: build
 	mkdir -p $(TEMP_DIR)
+	echo "WARNING: running several minutes ..."
 	GIN_MODE=release go test $(GO_TEST_FLAGS) -v -timeout 40m ./httptesting 2>&1
 
 test-all: test

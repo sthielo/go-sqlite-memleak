@@ -79,5 +79,8 @@ example results (process memory footprint - in KB) on my work station:
   When [further] simplifying the db schema, the problem seems to disappear even when adjusting the db size of the 
   remaining tables by adding more rows. That is why we left the structure as shown in this repo.
 
+* As the ***go managed memory is not increasing***, but only the OS view process footprint, we suspect sqlite
+  to be the culprit.
+
 => _our assumption: the snapshot db is not properly "disposed"._
 _What's wrong with our code? Or is it a problem somewhere in golang or even deeper in SQLite code?_

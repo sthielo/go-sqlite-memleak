@@ -7,6 +7,8 @@ run `make test` - WARNING: long running - several minutes on my workstation
 OSs supported:
 * Windows_NT => memory leak not observable - _at least not to the same extent_
   * uses `tasklist` to measure process memory footprint
+  * optionally uses `handle` provided by `sysinternals`(to install from a privileged powershell: 
+    `winget install sysinternals`) to count file handles used by testee process
 * Linux => ***memory leak observed***
   * uses `ps` to measure process memory footprint
   * uses `lsof` to count file handles used by testee process

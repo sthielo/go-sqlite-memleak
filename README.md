@@ -9,6 +9,7 @@ OSs supported:
   * uses `tasklist` to measure process memory footprint
 * Linux => ***memory leak observed***
   * uses `ps` to measure process memory footprint
+  * uses `lsof` to count file handles used by testee process
 
 ---
 
@@ -81,6 +82,9 @@ example results (process memory footprint - in KB) on my work station:
 
 * As the ***go managed memory is not increasing***, but only the OS view process footprint, we suspect sqlite
   to be the culprit.
+
+* no leaking file handles observed. usually varying between 15/16 on my machine with one file handle being opened 
+  and closed for the dump file in each iteration. 
 
 => _our assumption: the snapshot db is not properly "disposed"._
 _What's wrong with our code? Or is it a problem somewhere in golang or even deeper in SQLite code?_

@@ -4,6 +4,7 @@
 package httptesting
 
 import (
+	"bufio"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"os/exec"

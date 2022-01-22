@@ -11,14 +11,13 @@ import (
 	"testing"
 )
 
-func getProcessMem() string {
+func getProcessMem(t *testing.T) *ProcessStatEntry {
 	cmd := exec.Command("tasklist", "/fo", "csv", "/nh", "/fi", "IMAGENAME eq oom.exe")
-	b, _ := cmd.Output()
+	b, err := cmd.Output()
+	assert.Nilf(t, err, "could not execute `tasklist`: %+v", err)
 	splits := strings.Split(string(b), ",")
-	if len(splits) > 4 {
-		return splits[4]
-	}
-	return string(b)
+	assert.Greaterf(t, len(splits), 4, "tasklist output not as expected: %s", string(b))
+	return &ProcessStatEntry{splits[4], "n/a"}
 }
 
 func startMain(t *testing.T) *exec.Cmd {

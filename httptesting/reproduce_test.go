@@ -13,13 +13,18 @@ const totalRuns = 20 // => adjust test timeout in Makefile !!!
 
 const testeeBaseUrl = "http://localhost:8890"
 
+type ProcessStatEntry struct {
+	mem string
+	fh  string
+}
+
 func TestReproduceOoM(t *testing.T) {
 	_ = os.Chdir("..")
 	testee := startMain(t)
 
 	waitForTestee(t)
 
-	gatherMemStats()
+	gatherProcStats(t)
 	for r := 0; r < totalRuns; r++ {
 		_, _ = os.Stdout.WriteString(fmt.Sprintf("starting run: %d\n", r))
 		_ = os.Stdout.Sync()
@@ -27,24 +32,24 @@ func TestReproduceOoM(t *testing.T) {
 		callTestee(t, fmt.Sprintf("%s/dumpdb", testeeBaseUrl))
 
 		time.Sleep(5 * time.Second) // allow garbage collection to happen
-		gatherMemStats()
+		gatherProcStats(t)
 	}
-	printMemStats()
+	printProcStats()
 
 	_ = testee.Process.Kill()
 	_ = testee.Wait()
 }
 
-var memStats = make([]string, 0, totalRuns+1)
+var memStats = make([]*ProcessStatEntry, 0, totalRuns+1)
 
-func gatherMemStats() {
-	mem := getProcessMem()
-	memStats = append(memStats, mem)
+func gatherProcStats(t *testing.T) {
+	ps := getProcessStats(t)
+	memStats = append(memStats, ps)
 }
 
-func printMemStats() {
+func printProcStats() {
 	for i, m := range memStats {
-		_, _ = os.Stdout.WriteString(fmt.Sprintf("    %d: %s\n", i, m))
+		_, _ = os.Stdout.WriteString(fmt.Sprintf("    %d: %+v\n", i, m))
 	}
 	_ = os.Stdout.Sync()
 }

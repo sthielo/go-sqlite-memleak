@@ -58,13 +58,13 @@ func withSnapshotDo(exec func(snapshot *sql.DB) error) error {
 	if err != nil {
 		_, _ = os.Stdout.WriteString(">>> oom: " + fmt.Sprintf("cannot create temporary snapshotDb file - err: %+v", err) + "\n")
 	}
+	_ = file.Close()
 	defer func() {
 		err2 := os.RemoveAll(file.Name())
 		if err2 != nil {
 			_, _ = os.Stdout.WriteString(">>> oom: " + fmt.Sprintf("failed to remove temp snapshot db file %s", file.Name()) + "\n")
 		}
 	}()
-	defer file.Close()
 
 	snapshotConnStr := fmt.Sprintf("file:%s?mode=memory&cache=private&_journal_mode=OFF&_fk=off&_query_only=true&_locking=EXCLUSIVE&_mutex=no", file.Name())
 	// next line is a WORKAROUND - using file based db instead of in-mem (mode=rwc):

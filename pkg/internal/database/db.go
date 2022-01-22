@@ -20,9 +20,9 @@ func InitDB() {
 		_, _ = os.Stdout.WriteString(">>> oom: " + fmt.Sprintf("cannot create temporary db file - err: %+v", err) + "\n")
 		os.Exit(1)
 	}
-	defer file.Close()
+	_ = file.Close()
 
-	connStr := fmt.Sprintf("file:%s?mode=memory&cache=shared&_fk=1&_journal_mode=OFF&_locking=EXCLUSIVE&_mutex=no", file.Name())
+	connStr := fmt.Sprintf("file:%s?mode=memory&cache=private&_fk=1&_journal_mode=OFF&_locking=EXCLUSIVE&_mutex=no", file.Name())
 	MyDb, err = sql.Open("sqlite3", connStr)
 	if err != nil {
 		_, _ = os.Stdout.WriteString(">>> oom: " + fmt.Sprintf("cannot create db - err: %+v", err) + "\n")

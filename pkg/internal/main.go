@@ -70,7 +70,5 @@ func dumpDb(c *gin.Context) {
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
-
-	_, _ = os.Stdout.WriteString(">>> oom: " + ("dumped db\n") + "\n")
 	c.Status(http.StatusOK)
 }

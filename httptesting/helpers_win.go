@@ -25,7 +25,7 @@ func getProcessStats(t *testing.T) *ProcessStatEntry {
 	out, err = cmd.Output()
 	fdCnt := "n/a - needs `handle.exe` from `sysinternals`"
 	if err != nil {
-		os.Stdout.WriteString(fmt.Sprintf("Could not execute `handle` (needs `sysinternals`to be installed) to gather file descriptor usage: %+v\n", err))
+		_, _ = os.Stdout.WriteString(fmt.Sprintf("Could not execute `handle` (needs `sysinternals`to be installed) to gather file descriptor usage: %+v\n", err))
 	} else {
 		fdCnt = extractFileHandleCount(t, string(out))
 	}

@@ -13,11 +13,6 @@ const totalRuns = 20 // => adjust test timeout in Makefile !!!
 
 const testeeBaseUrl = "http://localhost:8890"
 
-type ProcessStatEntry struct {
-	mem string
-	fh  string
-}
-
 func TestReproduceOoM(t *testing.T) {
 	_ = os.Chdir("..")
 	testee := startMain(t)

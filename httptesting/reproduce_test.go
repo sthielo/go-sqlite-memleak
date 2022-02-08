@@ -13,6 +13,9 @@ const totalRuns = 20 // => adjust test timeout in Makefile !!!
 
 const testeeBaseUrl = "http://localhost:8890"
 
+var urlDumpDb = fmt.Sprintf("%s/dumpdb", testeeBaseUrl)
+var urlSnapshotDb = fmt.Sprintf("%s/snpshotonly", testeeBaseUrl)
+
 func TestReproduceOoM(t *testing.T) {
 	_ = os.Chdir("..")
 	testee := startMain(t)
@@ -24,7 +27,8 @@ func TestReproduceOoM(t *testing.T) {
 		_, _ = os.Stdout.WriteString(fmt.Sprintf("starting run: %d\n", r))
 		_ = os.Stdout.Sync()
 
-		callTestee(t, fmt.Sprintf("%s/dumpdb", testeeBaseUrl))
+		callTestee(t, urlDumpDb)
+		//callTestee(t, urlSnapshotDb)
 
 		time.Sleep(5 * time.Second) // allow garbage collection to happen
 		gatherProcStats(t)

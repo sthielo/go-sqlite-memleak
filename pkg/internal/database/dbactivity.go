@@ -7,9 +7,16 @@ import (
 	"fmt"
 	"github.com/mattn/go-sqlite3"
 	"github.com/schollz/sqlite3dump"
+	"gopkg.in/errgo.v2/errors"
 	"os"
 	"time"
 )
+
+const ActivityDump = "DUMP"
+const ActivityNone = "NONE"
+const ActivityOther = "OTHER"
+
+var invalidDbActivityCmd = errors.New("invalid db activity command - expected: DUMP, OTHER, NONE")
 
 /*
  * as dumping a db to sql stmts is a fairly slow process, the export first makes an in-memory backup (snapshot) of the
@@ -17,11 +24,23 @@ import (
  * as snapshotting is non-invasive, meaning it offers time slots for requests to happen, it may fail when such requests
  * update/change the database => export could be retried ... done so in our productive project
  */
-func Export() error {
+func Activity(cmd string) error {
 	_, _ = os.Stdout.WriteString(">>> oom: " + ("starting export ...\n") + "\n")
 	err := withSnapshotDo(func(dbToBackup *sql.DB) error {
-		return dumpToFile(dbToBackup) // snapshot db activity
-		// DISABLE snapshot db activity: return nil
+		if cmd == ActivityDump {
+			// original code to observe described memoey leak
+			// => almost every iteration shows a memory growth
+			return dumpToFile(dbToBackup) // snapshot db activity
+
+		} else if cmd == ActivityNone {
+			// snapshot only without any activity on that snapshot
+			// => only shows a memory growth the first few iterations and then only occasionally (like a log curve)
+
+		} else {
+			return invalidDbActivityCmd
+		}
+
+		return nil
 	})
 	if err != nil {
 		_, _ = os.Stdout.WriteString(">>> oom: " + ("failed to dump db") + "\n")
@@ -68,8 +87,8 @@ func withSnapshotDo(exec func(snapshot *sql.DB) error) error {
 
 	snapshotConnStr := fmt.Sprintf("file:%s?mode=memory&cache=private&_journal_mode=OFF&_fk=off&_query_only=true&_locking=EXCLUSIVE&_mutex=no", file.Name())
 
-	// >>> next line is a WORKAROUND - using file based db instead of in-mem (mode=rwc):
-	// snapshotConnStr := fmt.Sprintf("file:%s?mode=rwc&cache=private&_journal_mode=OFF&_fk=off&_query_only=true&_locking=EXCLUSIVE&_mutex=no", file.Name())
+	// >>> next line is a WORKAROUND - using file based db instead of in-mem (mode=rwc) => slower when creating snapshot db:
+	//snapshotConnStr := fmt.Sprintf("file:%s?mode=rwc&cache=private&_journal_mode=OFF&_fk=off&_query_only=true&_locking=EXCLUSIVE&_mutex=no", file.Name())
 
 	// >>> proposed in https://github.com/mattn/go-sqlite3/issues/1005#issuecomment-1019029882 : use `:memory:`instead of temp file name
 	//     => no impact on increasing memory consumption behavior

@@ -29,6 +29,7 @@ func main() {
 		gin.Recovery(),
 	)
 	manageRouter.GET("/dumpdb", dumpDb)
+	manageRouter.GET("/snpshotonly", snapshotOnly)
 
 	g, gCtx := errgroup.WithContext(ctx)
 
@@ -61,10 +62,20 @@ func main() {
 }
 
 /**
- * handler for the only web end point ...
+ * handler for the web end point ...
  */
 func dumpDb(c *gin.Context) {
-	err := database.Export()
+	err := database.Activity(database.ActivityDump)
+	if err != nil {
+		_, _ = os.Stdout.WriteString(">>> oom: " + fmt.Sprintf("error when dumping db: %+v\n", err) + "\n")
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	c.Status(http.StatusOK)
+}
+
+func snapshotOnly(c *gin.Context) {
+	err := database.Activity(database.ActivityNone)
 	if err != nil {
 		_, _ = os.Stdout.WriteString(">>> oom: " + fmt.Sprintf("error when dumping db: %+v\n", err) + "\n")
 		c.AbortWithStatus(http.StatusInternalServerError)

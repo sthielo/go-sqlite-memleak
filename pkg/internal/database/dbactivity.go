@@ -26,9 +26,11 @@ var invalidDbActivityCmd = errors.New("invalid db activity command - expected: D
  */
 func Activity(cmd string) error {
 	_, _ = os.Stdout.WriteString(">>> oom: " + ("starting export ...\n") + "\n")
+
+	// "snapshotting from in-memory db to another in-memory db (using distinct file urls) seems to be the root trigger for the observed memory leak
 	err := withSnapshotDo(func(dbToBackup *sql.DB) error {
 		if cmd == ActivityDump {
-			// original code to observe described memoey leak
+			// original code to observe described memoey leak - intense db activity seems to make the memory leak more "obvious"
 			// => almost every iteration shows a memory growth
 			return dumpToFile(dbToBackup) // snapshot db activity
 
@@ -42,6 +44,10 @@ func Activity(cmd string) error {
 
 		return nil
 	})
+
+	// VERIFICATION check: dump from main db, so NOT using "snapshotting" => no memory leak!
+	//err := dumpToFile(MyDb)
+
 	if err != nil {
 		_, _ = os.Stdout.WriteString(">>> oom: " + ("failed to dump db") + "\n")
 		return err

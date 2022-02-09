@@ -91,9 +91,13 @@ func withSnapshotDo(exec func(snapshot *sql.DB) error) error {
 		}
 	}()
 
+	// ORIG:
 	snapshotConnStr := fmt.Sprintf("file:%s?mode=memory&cache=private&_journal_mode=OFF&_fk=off&_query_only=true&_locking=EXCLUSIVE&_mutex=no", file.Name())
 
-	// >>> next line is a WORKAROUND - using file based db instead of in-mem (mode=rwc) => slower when creating snapshot db:
+	// TESTING some con str uri params => no effect - still memory leaking
+	// snapshotConnStr := fmt.Sprintf("file:%s?mode=memory&cache=private&_journal_mode=OFF&_fk=off&_mutex=no", file.Name())
+
+	// WORKAROUND: using file based db instead of in-mem (mode=rwc) => slower when creating snapshot db:
 	//snapshotConnStr := fmt.Sprintf("file:%s?mode=rwc&cache=private&_journal_mode=OFF&_fk=off&_query_only=true&_locking=EXCLUSIVE&_mutex=no", file.Name())
 
 	// >>> proposed in https://github.com/mattn/go-sqlite3/issues/1005#issuecomment-1019029882 : use `:memory:`instead of temp file name

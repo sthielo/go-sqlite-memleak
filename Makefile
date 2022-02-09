@@ -23,7 +23,7 @@ deps:
 
 build: clean deps
 	mkdir -p $(BUILD_DIR)
-	CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_FLAGS="-DSQLITE_USE_URI=1" go build -tags=nomsgpack -o $(BINARY) $(MAIN_SRC)
+	CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_FLAGS="-DSQLITE_USE_URI=1 -DSQLITE_THREADSAFE=0" go build -tags=nomsgpack -o $(BINARY) $(MAIN_SRC)
 
 lint-all:
 

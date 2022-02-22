@@ -34,3 +34,6 @@ test: build
 
 test-all: test
 
+run: build
+	mkdir -p $(TEMP_DIR)
+	./$(BINARY)

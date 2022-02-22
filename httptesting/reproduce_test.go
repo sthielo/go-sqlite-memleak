@@ -1,41 +1,46 @@
 package httptesting
 
 import (
+	"bufio"
 	"fmt"
 	"github.com/stretchr/testify/assert"
-	"net/http"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
 
 const totalRuns = 20 // => adjust test timeout in Makefile !!!
 
-const testeeBaseUrl = "http://localhost:8890"
-
-var urlDumpDb = fmt.Sprintf("%s/dumpdb", testeeBaseUrl)
-var urlSnapshotDb = fmt.Sprintf("%s/snpshotonly", testeeBaseUrl)
+var cmdDumpDb = "DUMP"
+var cmdSnapshot = "SNAPSHOT"
+var cmdEnd = "END"
 
 func TestReproduceOoM(t *testing.T) {
 	_ = os.Chdir("..")
-	testee := startMain(t)
+	testee, childStdout, childStdin := startMain(t)
+	defer childStdout.Close()
+	defer childStdin.Close()
+	childOutReader := bufio.NewReader(childStdout)
 
-	waitForTestee(t)
-
+	waitForTestee(t, childOutReader)
 	gatherProcStats(t)
 	for r := 0; r < totalRuns; r++ {
 		_, _ = os.Stdout.WriteString(fmt.Sprintf("starting run: %d\n", r))
 		_ = os.Stdout.Sync()
 
-		callTestee(t, urlDumpDb)
-		//callTestee(t, urlSnapshotDb)
+		_, _ = childStdin.Write([]byte(cmdDumpDb + "\n"))
+		//childStdin.Write([]byte(cmdSnapshot + "\n"));
 
-		time.Sleep(5 * time.Second) // allow garbage collection to happen
+		waitForTestee(t, childOutReader)
+		time.Sleep(2 * time.Second) // allow garbage collection to happen
 		gatherProcStats(t)
 	}
 	printProcStats()
+	_, _ = childStdin.Write([]byte(cmdEnd + "\n"))
 
-	_ = testee.Process.Kill()
+	childStdout.Close()
+	childStdin.Close()
 	_ = testee.Wait()
 }
 
@@ -53,29 +58,15 @@ func printProcStats() {
 	_ = os.Stdout.Sync()
 }
 
-var httpTestClient = http.Client{
-	// waiting for a db dump of a large db can take minutes :-(
-	Timeout: 10 * time.Minute,
-}
-
-func callTestee(t *testing.T, url string) {
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	assert.Nil(t, err, "Unexpected error creating request: %+v", err)
-	response, err := httpTestClient.Do(req)
-	assert.Nil(t, err, "Unexpected error executing request: %+v", err)
-	defer response.Body.Close()
-	assert.Equal(t, http.StatusOK, response.StatusCode)
-}
-
-// waiting for dummy data to be created - duration system dependant
-func waitForTestee(t *testing.T) {
-	for {
-		time.Sleep(10 * time.Second)
-		req, err := http.NewRequest(http.MethodGet, testeeBaseUrl, nil)
-		assert.Nil(t, err, "Unexpected error creating request: %+v", err)
-		_, err = httpTestClient.Do(req)
-		if err == nil {
-			break
+// waiting for "DONE*" ...
+func waitForTestee(t *testing.T, scanner *bufio.Reader) {
+	done := false
+	for !done {
+		input, err := scanner.ReadString('\n')
+		if err != nil {
+			assert.Failf(t, "Failed to read child stdout", "%+v", err)
 		}
+		done = strings.HasPrefix(input, "DONE")
+		_, _ = os.Stderr.WriteString("### oom-stdout: " + input + "\n")
 	}
 }

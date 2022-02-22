@@ -1,17 +1,9 @@
 package main
 
 import (
-	"context"
-	"errors"
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"github.com/sthielo/go-sqlite-memleak/pkg/internal/database"
-	"golang.org/x/sync/errgroup"
-	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
-	"time"
 )
 
 func main() {
@@ -19,67 +11,40 @@ func main() {
 	defer database.MyDb.Close()
 	database.FillInDummyData()
 
-	// setup context and signal handling
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
-	defer stop()
+	_, _ = os.Stdout.WriteString("DONE\n")
 
-	// web srv setup
-	manageRouter := gin.New()
-	manageRouter.Use(
-		gin.Recovery(),
-	)
-	manageRouter.GET("/dumpdb", dumpDb)
-	manageRouter.GET("/snpshotonly", snapshotOnly)
+	cmd := waitInput() // wait 'END' or 'CONTINUE'/'DUMP' or 'SNAPSHOT' (any input) - give time to gather process stats
+	for i := 0; cmd != "END" && i < 30; i++ {
 
-	g, gCtx := errgroup.WithContext(ctx)
+		if cmd == "CONTINUE" || cmd == "DUMP" {
+			dumpDb()
+		} else if cmd == "SNAPSHOT" {
+			snapshotOnly()
+		}
 
-	g.Go(func() error {
-		_, _ = os.Stdout.WriteString(">>> oom: " + ("start listening on port 8890 ...") + "\n")
-		srv := &http.Server{Addr: ":8890", Handler: manageRouter}
-		g.Go(func() error {
-			if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-				return err
-			}
-			return nil
-		})
+		_, _ = os.Stdout.WriteString(fmt.Sprintf("DONE iteration %d\n"))
+		cmd = waitInput()
+	}
+}
 
-		<-gCtx.Done()
-		_, _ = os.Stdout.WriteString(">>> oom: " + ("stop listening ...") + "\n")
-		timeoutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
-		srv.SetKeepAlivesEnabled(false) //close idle connections
-		return srv.Shutdown(timeoutCtx)
-	})
-
-	// Listen for the interrupt signal.
-	<-ctx.Done()
-	stop()
-
-	if err := g.Wait(); err != nil {
-		_, _ = os.Stdout.WriteString(">>> oom: " + fmt.Sprintf("error on shutdown: %+v", err) + "\n")
+func dumpDb() {
+	err := database.Activity(database.ActivityDump)
+	if err != nil {
+		_, _ = os.Stdout.WriteString(">>> oom: " + fmt.Sprintf("error when dumping db: %+v\n", err) + "\n")
 		os.Exit(1)
 	}
 }
 
-/**
- * handler for the web end point ...
- */
-func dumpDb(c *gin.Context) {
-	err := database.Activity(database.ActivityDump)
-	if err != nil {
-		_, _ = os.Stdout.WriteString(">>> oom: " + fmt.Sprintf("error when dumping db: %+v\n", err) + "\n")
-		c.AbortWithStatus(http.StatusInternalServerError)
-		return
-	}
-	c.Status(http.StatusOK)
-}
-
-func snapshotOnly(c *gin.Context) {
+func snapshotOnly() {
 	err := database.Activity(database.ActivityNone)
 	if err != nil {
 		_, _ = os.Stdout.WriteString(">>> oom: " + fmt.Sprintf("error when dumping db: %+v\n", err) + "\n")
-		c.AbortWithStatus(http.StatusInternalServerError)
-		return
+		os.Exit(1)
 	}
-	c.Status(http.StatusOK)
+}
+
+func waitInput() string {
+	var cmd string
+	_, _ = fmt.Scanln(&cmd)
+	return cmd
 }

@@ -32,14 +32,15 @@ func getProcessStats(t *testing.T) *ProcessStatEntry {
 	return &ProcessStatEntry{mem, fdCnt}
 }
 
-func startMain(t *testing.T) *exec.Cmd {
+func startMain(t *testing.T) (*exec.Cmd, io.ReadCloser, io.WriteCloser) {
 	wd, _ := os.Getwd()
 	testee := exec.Command("./artifacts/oom.exe")
-	testee.Stdout = os.Stdout
 	testee.Stderr = os.Stderr
+	childStdout, _ := testee.StdoutPipe()
+	childStdin, _ := testee.StdinPipe()
 	err := testee.Start()
 	assert.Nil(t, err, "error starting testee (%s in %s): %+v", testee.Path, wd, err)
-	return testee
+	return testee, childStdout, childStdin
 }
 
 func extractFileHandleCount(t *testing.T, s string) string {

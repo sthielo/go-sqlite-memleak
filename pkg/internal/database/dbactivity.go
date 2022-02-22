@@ -6,8 +6,8 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/mattn/go-sqlite3"
-	"github.com/schollz/sqlite3dump"
 	"gopkg.in/errgo.v2/errors"
+	"io"
 	"os"
 	"time"
 )
@@ -74,7 +74,9 @@ func dumpToFile(dbToBackup *sql.DB) error {
 	gw := gzip.NewWriter(dumpfile)
 	defer gw.Close()
 
-	err = sqlite3dump.DumpDB(dbToBackup, gw, sqlite3dump.WithMigration())
+	// ORIG using github.com/schollz/sqlite3dump to dump db
+	// err = sqlite3dump.DumpDB(dbToBackup, gw, sqlite3dump.WithMigration())
+	err = alternativeDump(dbToBackup, gw)
 	return err
 }
 
@@ -94,7 +96,7 @@ func withSnapshotDo(exec func(snapshot *sql.DB) error) error {
 	// ORIG:
 	snapshotConnStr := fmt.Sprintf("file:%s?mode=memory&cache=private&_journal_mode=OFF&_fk=off&_query_only=true&_locking=EXCLUSIVE&_mutex=no", file.Name())
 
-	// TESTING some con str uri params => no effect - still memory leaking
+	// TESTING some conn str uri params => no effect - still memory leaking
 	// snapshotConnStr := fmt.Sprintf("file:%s?mode=memory&cache=private&_journal_mode=OFF&_fk=off&_mutex=no", file.Name())
 
 	// WORKAROUND: using file based db instead of in-mem (mode=rwc) => slower when creating snapshot db:
@@ -166,4 +168,113 @@ func createDbSnapshot(snaphshotSqliteConn *sqlite3.SQLiteConn, srcSqliteConn *sq
 		}
 	}
 	return err
+}
+
+const stmtTables = `SELECT "name", "type", "sql" 
+		FROM "sqlite_master" 
+		WHERE "sql" NOT NULL AND "type" == 'table' 
+		ORDER BY "name"`
+
+type ColumnInfo struct {
+	colName string
+	colType string
+}
+type TableInfo struct {
+	columnInfos []*ColumnInfo
+}
+
+/**
+ * simplified alternative implementation not to depend on github.com/schollz/sqlite3dump
+ */
+func alternativeDump(db *sql.DB, file io.Writer) error {
+	_, err := file.Write([]byte("BEGIN TRANSACTION;\n"))
+	failOnErr("write tx begin", err)
+
+	tableNames := getTableNames(db)
+
+	for _, tableName := range tableNames {
+		tableInfo := getTableInfo(db, tableName)
+
+		stmtpartColNames := ""
+		stmtpartColValues := ""
+		for i, ci := range tableInfo.columnInfos {
+			if i > 0 {
+				stmtpartColNames += ", "
+				stmtpartColValues += ", "
+			}
+			stmtpartColNames += "\"" + ci.colName + "\""
+			if ci.colType == "text" {
+				stmtpartColValues += "' || quote(\"" + ci.colName + "\") || '"
+			} else {
+				stmtpartColValues += "' || \"" + ci.colName + "\" || '"
+			}
+		}
+
+		stmtInsStmts := "SELECT 'INSERT INTO \"" + tableName + "\"(" + stmtpartColNames + ")" +
+			" VALUES(" + stmtpartColValues + ")' from \"" + tableName + "\""
+		dumpInsStmts(db, stmtInsStmts, file)
+	}
+
+	_, err = file.Write([]byte("COMMIT;\n"))
+	failOnErr("write commit", err)
+
+	return nil
+}
+
+func getTableNames(db *sql.DB) []string {
+	tableRows, err := db.Query(stmtTables)
+	failOnErr("query tables", err)
+	defer tableRows.Close()
+
+	tableNames := make([]string, 0, 10)
+	for tableRows != nil && tableRows.Next() {
+		var tableName string
+		var tableType string
+		var creationStmt string
+		err = tableRows.Scan(&tableName, &tableType, &creationStmt)
+		failOnErr("step tables", err)
+		tableNames = append(tableNames, tableName)
+	}
+	return tableNames
+}
+
+func getTableInfo(db *sql.DB, tableName string) *TableInfo {
+	stmtTableInfo := "PRAGMA table_info('" + tableName + "')"
+	rs, err := db.Query(stmtTableInfo)
+	failOnErr("table info", err)
+	defer rs.Close()
+
+	var colInfos = make([]*ColumnInfo, 0, 3)
+	var colId int
+	var colName string
+	var colType string
+	var nullable int
+	var defaultVal sql.NullString
+	var pk int
+	for rs != nil && rs.Next() {
+		err = rs.Scan(&colId, &colName, &colType, &nullable, &defaultVal, &pk)
+		failOnErr("parse table info", err)
+		colInfos = append(colInfos, &ColumnInfo{
+			colName: colName,
+			colType: colType,
+		})
+	}
+
+	return &TableInfo{columnInfos: colInfos}
+}
+
+func dumpInsStmts(db *sql.DB, stmtInsStmts string, file io.Writer) {
+	insRows, err := db.Query(stmtInsStmts)
+	failOnErr("query table content", err)
+	defer insRows.Close()
+
+	for insRows != nil && insRows.Next() {
+		var insStmt string
+		err = insRows.Scan(&insStmt)
+		failOnErr("step insStmts", err)
+
+		_, err = file.Write([]byte(insStmt + ";\n"))
+		failOnErr("write insStmts", err)
+	}
+
 }

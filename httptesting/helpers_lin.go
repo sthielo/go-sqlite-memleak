@@ -6,6 +6,7 @@ package httptesting
 import (
 	"bufio"
 	"github.com/stretchr/testify/assert"
+	"io"
 	"os"
 	"os/exec"
 	"strconv"
@@ -29,14 +30,17 @@ func getProcessStats(t *testing.T) *ProcessStatEntry {
 	return &ProcessStatEntry{mem, strconv.Itoa(fdCnt)}
 }
 
-func startMain(t *testing.T) *exec.Cmd {
+func startMain(t *testing.T) (*exec.Cmd, io.ReadCloser, io.WriteCloser) {
 	wd, _ := os.Getwd()
 	testee := exec.Command("./artifacts/oom")
-	testee.Stdout = os.Stdout
 	testee.Stderr = os.Stderr
-	err := testee.Start()
+	childStdout, err := testee.StdoutPipe()
+	assert.Nil(t, err, "error gettng testee's stdout pipe (%s in %s): %+v", testee.Path, wd, err)
+	childStdin, err := testee.StdinPipe()
+	assert.Nil(t, err, "error gettng testee's stdin pipe (%s in %s): %+v", testee.Path, wd, err)
+	err = testee.Start()
 	assert.Nil(t, err, "error starting testee (%s in %s): %+v", testee.Path, wd, err)
-	return testee
+	return testee, childStdout, childStdin
 }
 
 func countLines(s string) int {
